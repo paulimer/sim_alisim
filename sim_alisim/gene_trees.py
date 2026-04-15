@@ -2,6 +2,7 @@
 
 # Trying to implement the same thing with monkey patching
 
+from sim_alisim.synthetic_mld import stick_breaking_exp
 import argparse
 import concurrent.futures
 import itertools
@@ -22,6 +23,9 @@ from scipy.stats import norm, truncnorm, kstest, gmean, uniform, lognorm
 import seaborn as sns
 from skbio import TreeNode
 import yaml
+
+from mosaic_method.parsing import bin_mld
+from mosaic_method.fitting import theoretical_mld
 
 
 # DONE: write random walk function
@@ -122,7 +126,7 @@ def random_walk(mu, rw_step, time, muc, mus, linear=False):
 
     lower_bound = True
 
-    if muc == None:
+    if muc is None:
         lower_bound = False
         # just to define the step size don't worry
         muc = mu / 100
@@ -204,8 +208,7 @@ def kishino_bounded_log_brownian(mu, nu, time, muc, mus):
     return end_mu, branch_mu, movement
 
 
-
-def get_random_walk_tree(tree, rw_step, mu, muc, mus, mean_steps=False, return_instant=False):
+def get_random_walk_tree(tree, rw_step_fraction, mu, muc, mus, mean_steps=False, return_instant=False):
     """
     Get a "mutation rate" tree with a random walk rate variation.
 
@@ -213,8 +216,8 @@ def get_random_walk_tree(tree, rw_step, mu, muc, mus, mean_steps=False, return_i
     ----------
     tree : TreeNode
         The tree to copy.
-    rw_step : float
-        The step size of the random walk.
+    rw_step_fraction : float
+        The amount of steps to walk the tree.
     mu : float
         The "root" mutation rate.
 
@@ -279,8 +282,6 @@ def get_kishino_tree(tree: TreeNode, nu: float, mu: float, return_instant: bool=
     if return_instant:
         return mutation_rate_tree, instant_mutation_rate_tree
     return mutation_rate_tree
-
-
 
 
 def get_null_model_tree(time_tree, mu, muc, mus):
@@ -750,6 +751,61 @@ def plot_distance_distribution(axs, species_tree, gene_trees, muc_mus, label="ob
         # ax.text(0.5, 0.15, f"KS where : {ks_where:.2f}", transform=ax.transAxes)
 
 
+def plot_pseudo_empirical(axs, tips_mut_rate, time_tree, gene_length):
+    """
+    Based on pairwise mutation rates distribution, plots a pseudo-empirical mld.
+
+    axs: plt.Axes
+        The axes to plot on
+    tips_mut_rate: dict
+        The pairwise average mutation rates for each side of the last common ancestor of each pair of gene tree leaves.
+    time_tree: TreeNode
+        The species tree with branch lengths as time.
+    gene_length: int
+        The length of genes in simulations.
+    """
+
+    mean_rates = {key: [(a + b) / 2 for a, b in value] for key, value in tips_mut_rate.items()}
+    r = np.arange(1, gene_length+1)
+    muc_mus = {pair: [min(muss), max(muss)] for pair, muss in mean_rates.items()}
+    for i, (pair, rates) in enumerate(mean_rates.items()):
+        ax = axs[i]
+        mlds = np.zeros(int(gene_length))
+        time_lca = time_tree.lca([time_tree.find(pair[0]), time_tree.find(pair[1])])
+        tau = time_lca.height()[0] * 2 # times two because two branches
+        for rate in rates:
+            mld = stick_breaking_exp(gene_length, rate, tau, r)
+            mld = np.pad(mld, (0, len(mlds) - len(mld)), 'constant', constant_values=0)
+            mlds += mld
+        summed_mld = pd.DataFrame(mlds, columns=["freq"]).reset_index(names="match_length")
+        summed_mld["match_length"] += 1
+        binned_mld = bin_mld(
+            summed_mld,
+            linear_bin_width=3,
+            limit_size=30.5,
+            power_increment=0.1,
+            ncomp=1
+        )
+        _, th_mc = theoretical_mld(
+            [np.log10(tau), -20],
+            0.1,
+            r,
+            muc_mus[pair][1],
+            muc_mus[pair][0],
+            0.85,
+            len(mean_rates) * gene_length,
+            False
+        )
+        ax.scatter(binned_mld["match_length"], binned_mld["freq"], color="black", label="pseudo-empirical")
+        ax.plot(r, th_mc, label="mc - expected", color="green")
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        ax.set_title(f"MLD fit for {pair[0]} vs {pair[1]}")
+        ax.legend()
+        ax.set_xlabel("Match length")
+        ax.set_ylabel("Normalized count")
+
+
 def run_alisim(gene_tree, outdir, length_gene, num, seed):
     """
     Create sequences from Alisim for a gene tree.
@@ -779,7 +835,7 @@ def run_alisim(gene_tree, outdir, length_gene, num, seed):
     except sp.CalledProcessError as e:
         print("Error with command")
         print(" ".join(alisim_cmd))
-        raise sp.CalledProcessError
+        raise e
 
     os.remove(tree_path)
     os.remove(f"{tree_path}.log")
@@ -1156,9 +1212,34 @@ if __name__ == "__main__":
 
 
     if args.nvruse:
-        muc = 6e-13
-        mus = 1e-9
-        n_genes = 1e3
+        muc = 1e-12
+        mus = 1e-8
+        n_genes = 1e5
+
+        # testing plot_distance_distribution
+        # and plot_mutation_rate_distribution
+        species_tree = TreeNode.read(["(C:2,(A:1,B:1):1);"])
+        time_tree = get_time_tree(species_tree, 1e8)
+        rate_trees = []
+        for _ in range(int(n_genes)):
+            rate_trees.append(get_null_model_tree(time_tree, np.random.uniform(muc, mus) , muc, mus))
+        fig, axs = plt.subplots(3, 1)
+
+        tips_mut_rate = get_all_pair_mutation_rate(rate_trees, time_tree)
+        mean_rates = {key: [(a + b) / 2 for a, b in value] for key, value in tips_mut_rate.items()}
+        muc_mus = {pair: [min(muss), max(muss)] for pair, muss in mean_rates.items()}
+        plot_distance_distribution(axs, rate_trees, muc_mus, time_tree)
+
+
+
+
+
+
+
+
+
+
+
         # all_mus = np.exp(np.random.uniform(np.log(muc), np.log(mus), size=int(n_genes)))
         all_mus = [1e-10] * int(n_genes)
         # all_mus = np.random.uniform(muc, mus, size=int(n_genes))
@@ -1245,7 +1326,7 @@ if __name__ == "__main__":
             rw_step = cherry_tau / rw
             print(f"rw : {rw}")
             cherries = generate_gene_trees(cherry_species_tree, 1000, muc, mus, rw_step=rw_step)
-            tips_mut_rate = get_all_pair_mutation_rate(cherry_species_tree, cherries)
+            tips_mut_rate = get_all_pair_mutation_rate(cherries, cherry_species_tree)
             mean_mus = {}
             for pair, dists in tips_mut_rate.items():
                 mean_mus[pair] = [(a + b)/2 for a, b in dists]
@@ -1444,7 +1525,7 @@ if __name__ == "__main__":
         fig, axs = plt.subplots(len(betas), 3, figsize=(10, 10))
         for i, beta  in enumerate(betas):
             gene_trees = generate_gene_trees(time_tree, 1000, muc, mus, beta=beta, fixed_mu=1e-9)
-            tips_mut_distr[beta] = get_all_pair_mutation_rate(time_tree, gene_trees)
+            tips_mut_distr[beta] = get_all_pair_mutation_rate(gene_trees, time_tree)
             hist_bins = np.logspace(np.log10(muc), np.log10(mus), 30)
             ax = axs[i, 0]
             hist, bins = np.histogram([a for _, value in tips_mut_distr[beta].items() for a, _ in value], bins=hist_bins, density=True)
@@ -1553,7 +1634,7 @@ if __name__ == "__main__":
             species_tree = TreeNode.read([f"(A:1,B:1);"])
             tree_height = 2e8
             time_tree = get_time_tree(species_tree, tree_height)
-            all_mus = get_all_pair_mutation_rate(species_tree, gene_trees)
+            all_mus = get_all_pair_mutation_rate(gene_trees, time_tree)
             summed_mus = [a + b for a, b in all_mus[("A", "B")]]
             muc = np.min(summed_mus)
             mus = np.max(summed_mus)

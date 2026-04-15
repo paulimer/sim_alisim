@@ -5,9 +5,8 @@ import os
 import sys
 import yaml
 
-sys.path.append("/home/paulimer/Documents/test_florian")
-from residuals_plot import calc_residuals, plot_resid, chi_square
-from simulate_infer import to_list, RATE_EVOLUTION_DIC
+from mosaic_method.residuals_plot import calc_residuals, plot_resid, chi_square
+from sim_alisim.simulate_infer import to_list, RATE_EVOLUTION_DIC
 
 import matplotlib.pyplot as plt
 import pandas as pd

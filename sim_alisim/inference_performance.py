@@ -17,7 +17,7 @@ import sklearn as sk
 from skbio import DistanceMatrix, TreeNode
 from skbio.tree import upgma
 
-from simulate_infer import fit_mld
+from sim_alisim.simulate_infer import fit_mld
 
 def nb_steps(row):
     return int(((row["sim_tau"]/2)/row["tree_height"]) * row["rw_step"])

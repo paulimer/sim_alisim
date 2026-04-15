@@ -6,6 +6,7 @@ import concurrent.futures
 import cProfile
 import itertools
 import os
+from pathlib import Path
 import pstats
 import sys
 import time
@@ -25,7 +26,7 @@ RATE_EVOLUTION_DIC = {
     "null": "none"
 }
 
-from sim_alisim.gene_trees import get_time_tree, run_simulation, get_all_pair_mutation_rate, to_list
+from sim_alisim.gene_trees import get_time_tree, run_simulation, get_all_pair_mutation_rate, to_list, generate_gene_trees, plot_distance_distribution, plot_pseudo_empirical
 from sim_alisim.theoretical_vs_simulated import ALIGNER_DELTA
 from mosaic_method.fitting import theoretical_mld, fit_params
 from mosaic_method.parsing import get_genome_comp, get_all_mlds, sum_mlds, bin_mld
@@ -212,6 +213,7 @@ def plot_mld_fit_and_expected(fitted_params, binned_mld, ax, empirical_muc, empi
         plt.savefig(outfile)
     return {"genome_1": level[0], "genome_2": level[1], "fit_tau": fitted_params[0], "sim_tau": simulated_params[0], "empirical_muc": empirical_muc, "empirical_mus": empirical_mus}
 
+
 def simulate_infer(simulation_cfg, inference_cfg):
     rate_evolution_parameter = RATE_EVOLUTION_DIC[simulation_cfg["rate_evolution"]]
     tree_heights = to_list(simulation_cfg["tree_height"])
@@ -374,7 +376,48 @@ def simulate_infer(simulation_cfg, inference_cfg):
 
     if tmpdir != simulation_cfg["outdir"]:
         shutil.copytree(tmpdir, simulation_cfg["outdir"], dirs_exist_ok=True)
-            
+
+
+def simulate_trees(simulation_cfg):
+    """
+    Simulate only trees, plot the distribution of mutation rates, computes pseudo-empirical mlds.
+    """
+    rate_evolution_parameter = RATE_EVOLUTION_DIC[simulation_cfg["rate_evolution"]]
+    tree_heights = to_list(simulation_cfg["tree_height"])
+    tree_heights = [float(th) for th in tree_heights]
+    if rate_evolution_parameter == "none":
+        rate_params = ["none"]
+    else:
+        rate_params = simulation_cfg[rate_evolution_parameter].copy()
+    configs = [{"tree_height": th, rate_evolution_parameter: rep} for th, rep in itertools.product(tree_heights, rate_params)]
+    plot_names = [f"{conf['tree_height']:.2e}_{rate_evolution_parameter}_{conf[rate_evolution_parameter]}_mudistr.png" for conf in configs]
+    species_tree = TreeNode.read([simulation_cfg["species_tree"]])
+    n_combinations = len(list(itertools.combinations(species_tree.tips(), 2)))
+
+    for conf, plot_n in zip(configs, plot_names):
+        time_tree = get_time_tree(species_tree, conf["tree_height"])
+        fig, axs = plt.subplots(n_combinations, 2, figsize=(10, 5*n_combinations), layout="constrained")
+        rate_evolution_value = None if rate_evolution_parameter == "none" else float(conf[rate_evolution_parameter])
+        mutation_rate_trees = generate_gene_trees(
+            time_tree=time_tree,
+            n=simulation_cfg["n_gene_trees"],
+            muc=float(simulation_cfg["muc"]),
+            mus=float(simulation_cfg["mus"]),
+            threads=simulation_cfg["threads"],
+            rate_evolution=simulation_cfg["rate_evolution"],
+            rate_evolution_value=rate_evolution_value,
+            mean_steps=bool(simulation_cfg.get("mean_steps", False)),
+        )
+        tips_mut_rate = get_all_pair_mutation_rate(mutation_rate_trees, time_tree)
+        mean_mus = {}
+        for pair, dists in tips_mut_rate.items():
+            mean_mus[pair] = [a + b for a, b in dists]
+        muc_mus = {pair: [min(muss), max(muss)] for pair, muss in mean_mus.items()}
+        plot_distance_distribution(axs[:, 0], mutation_rate_trees=mutation_rate_trees, muc_mus=muc_mus, time_tree=time_tree)
+        plot_pseudo_empirical(axs[:, 1], tips_mut_rate, time_tree, float(simulation_cfg["length_gene"]))
+        fig.savefig(Path(simulation_cfg["outdir"]) / plot_n, dpi=300)
+
+
 
 
 

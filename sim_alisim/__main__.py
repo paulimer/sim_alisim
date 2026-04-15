@@ -7,7 +7,7 @@ import shutil
 import tracemalloc
 import yaml
 
-from .simulate_infer import simulate_infer
+from sim_alisim.simulate_infer import simulate_infer, simulate_trees
 
 
 def main():
@@ -21,12 +21,15 @@ def main():
     with open(args.inference_cfg, "r") as f:
         inference_cfg = yaml.safe_load(f)
 
-    # copy the configs to the output directories
     os.makedirs(simulation_cfg["outdir"], exist_ok=True)
-    if not os.path.exists(args.simulation_cfg):
+    # copy the configs to the output directories
+    if not os.path.exists(os.path.join(simulation_cfg["outdir"], args.simulation_cfg)):
         shutil.copy(args.simulation_cfg, simulation_cfg["outdir"])
         shutil.copy(args.inference_cfg, simulation_cfg["outdir"])
 
+    if not simulation_cfg["sequences"]:
+        simulate_trees(simulation_cfg)
+        return
     tracemalloc.start()
     with cProfile.Profile() as pr:
         simulate_infer(simulation_cfg, inference_cfg)
