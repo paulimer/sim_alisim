@@ -1,0 +1,4 @@
+/plots/
+/*.png
+/__pycache__/
+/sim_alisim/__pycache__/*.pyc
