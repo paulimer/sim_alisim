@@ -7,11 +7,13 @@ import shutil
 import tracemalloc
 import yaml
 
-from sim_alisim.simulate_infer import simulate_infer, simulate_trees
+from sim_alisim.simulate_infer import simulate_infer
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run the gene tree simulation and the inference")
+    parser = argparse.ArgumentParser(
+        description="Run the gene tree simulation and the inference"
+    )
     parser.add_argument("simulation_cfg", help="Path to the simulation config file")
     parser.add_argument("inference_cfg", help="Path to the inference config file")
     args = parser.parse_args()
@@ -27,15 +29,12 @@ def main():
         shutil.copy(args.simulation_cfg, simulation_cfg["outdir"])
         shutil.copy(args.inference_cfg, simulation_cfg["outdir"])
 
-    if not simulation_cfg["sequences"]:
-        simulate_trees(simulation_cfg)
-        return
     tracemalloc.start()
     with cProfile.Profile() as pr:
         simulate_infer(simulation_cfg, inference_cfg)
         pstats.Stats(pr).sort_stats("cumtime").print_stats(50)
     snapshot = tracemalloc.take_snapshot()
-    top_stats = snapshot.statistics('lineno')
+    top_stats = snapshot.statistics("lineno")
     print("[ Top 10 ]")
     for stat in top_stats[:10]:
         print(stat)

@@ -1,4 +1,3 @@
-import json
 import pandas as pd
 import os
 import shutil
@@ -7,7 +6,7 @@ import subprocess as sp
 import shlex
 # run from sim_alisim
 thread_each = 30
-results_dir = "/project/bacteria_mlds/sim_alisim/debug_runs"
+results_dir = "/project/bacteria_mlds/results_simulation/debug_runs/"
 base_inf_conf_path = "/project/bacteria_mlds/sim_alisim/entero_inf_config.yaml"
 base_shell_script = """
 #!/usr/bin/env sh
@@ -17,15 +16,12 @@ conda activate alisim
 python_command
 conda deactivate
 """
-with open("base_entero_sim_config.yaml", "r") as base_f:
+with open("../base_entero_sim_config.yaml", "r") as base_f:
     base_entero_conf = yaml.safe_load(base_f)
-with open("base_abc_sim_config.yaml", "r") as base_f:
+with open("../base_abc_sim_config.yaml", "r") as base_f:
     base_abc_conf = yaml.safe_load(base_f)
 
-with open("parameters.json", "r") as f:
-    param_table = json.load(f)
-
-params_df = pd.DataFrame(param_table)
+params_df = pd.read_csv("parameters.csv", keep_default_na=False)
 params_df = params_df.astype(str)
 params_df["name"] = params_df["Evolution method"].str.replace("[ \(\)]", "_", regex=True) + "__" +\
     params_df["mumin"] + "_" + params_df["mumax"] + "__" + \
@@ -62,7 +58,7 @@ for _, row in params_df.iterrows():
     with open(sim_path, "w") as out_f:
         out_f.write(yaml.safe_dump(current_conf))
     inf_path = shutil.copy(base_inf_conf_path, outdir)
-    py_command = f"python simulate_infer.py {sim_path} {inf_path}"
+    py_command = f"sim {sim_path} {inf_path}"
     with open(os.path.join(outdir, "submit_simu.sh"), "w") as out_sh:
         shell_script = base_shell_script.replace("python_command", py_command)
         out_sh.write(shell_script)

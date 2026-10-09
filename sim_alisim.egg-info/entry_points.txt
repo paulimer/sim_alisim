@@ -1,0 +1,2 @@
+[console_scripts]
+sim = sim_alisim.__main__:main

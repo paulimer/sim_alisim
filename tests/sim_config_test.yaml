@@ -3,13 +3,20 @@ outdir: "tests/test_sim"
 threads: 6
 
 # sim parameters --------------------------------------------------------------
-species_tree: "(C:2,(A:1,B:1):1);"
+species_tree: "(Vibriocholerae:0.999999999943074,(Serratia:0.4843095564299534,(((Escherichiaalbertii:0.06701252520468336,(Escherichiacoli:0.030981139651266205,Escherichiafergusonii:0.030981139651266205):0.03603138555779608):0.14407560119681823,(Citrobacter:0.18985823601503224,Salmonellaenterica:0.18985823601503224):0.021229890399606127):0.05749767212496895,((EnterobacterhormaecheiC:0.08407297232372249,(EnterobacterasburiaeB:0.036149653179077826,Enterobacterroggenkampii:0.036149653179077826):0.04792331916216042):0.16640629781363617,(Cronobacter:0.21506144567938124,Klebsiellapneumoniae:0.21506144567938124):0.035417824466735304):0.01810652837159608):0.2157237579472722):0.5156904435131207);"
 tree_height: 1e8
-muc: 6e-10
-mus: 1e-9
-n_gene_trees: 100
+mumin: 1e-11
+mumax: 1e-9
+n_gene_trees: 10000
 length_gene: 1000
-# random_walk, lognormal, none, null
-rate_evolution: "null"
-mean_steps: true
+# random_walk, kishino, none, null
+rate_evolution: "kishino"
+nu:
+  - 5.e-7
+  - 1.e-6
+  - 5.e-6
+  - 1.e-5
+  - 5.e-5
+mean_steps: false
 hgt: false
+sequences: false

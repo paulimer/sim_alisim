@@ -24,6 +24,7 @@ dependencies:
   - scipy
   - seaborn
   - mash
+  - jax
   - pip
   - pip:
       - -e ../mosaic_method

@@ -10,14 +10,16 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import sys
-# sys.path.append("/home/paulimer/Documents/tools/CoreSimul/jc_correction")
-# from calc import theoretical_mld, integrand
+from mosaic_method.fitting import theoretical_mld
 
 ALIGNER_DELTA = {
     "lastz": 0.82,
     "mummer": 0.25,
+    "lastz_corrected": 0.82,
+    "mummer_corrected": 0.25,
     "lastz_uncorrected": 0.5,
-    "mummer_uncorrected":0.2
+    "mummer_uncorrected":0.2,
+    "no_aligner": 3
 }
 
 def filter_many_and(list_of_masks):
